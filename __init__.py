@@ -202,7 +202,6 @@ class AnimaXPredModelLoader:
                 "checkpoint": (_model_names(XPRED_FOLDER, "put_xpred_checkpoint_in_models_anima_xpred.safetensors"),),
                 "text_encoder": (_model_names("text_encoders", "put_qwen_text_encoder_in_models_text_encoders.safetensors"),),
                 "vae": (_model_names("vae", "put_qwen_image_vae_in_models_vae.safetensors"),),
-                "base_dit": (_model_names("diffusion_models", "put_anima_base_dit_in_models_diffusion_models.safetensors"),),
                 "prediction_type": (["x", "v"], {"default": "x"}),
                 "precision": (["bf16", "fp16", "fp32"], {"default": "bf16"}),
                 "attn_mode": (["torch", "flash", "sageattn", "xformers"], {"default": "flash"}),
@@ -222,7 +221,6 @@ class AnimaXPredModelLoader:
         checkpoint: str,
         text_encoder: str,
         vae: str,
-        base_dit: str,
         prediction_type: str,
         precision: str,
         attn_mode: str,
@@ -233,12 +231,10 @@ class AnimaXPredModelLoader:
         checkpoint_path = _model_path(XPRED_FOLDER, checkpoint)
         text_encoder_path = _model_path("text_encoders", text_encoder)
         vae_path = _model_path("vae", vae)
-        base_dit_path = _model_path("diffusion_models", base_dit)
         for label, path in {
             "checkpoint": checkpoint_path,
             "text_encoder": text_encoder_path,
             "vae": vae_path,
-            "base_dit": base_dit_path,
         }.items():
             if not path.is_file():
                 raise FileNotFoundError(f"{label} not found: {path}")
@@ -246,7 +242,7 @@ class AnimaXPredModelLoader:
         device = _comfy_device()
         dtype = _dtype_from_name(precision)
         args = SimpleNamespace(
-            dit=str(base_dit_path),
+            dit=str(checkpoint_path),
             student_init=str(checkpoint_path),
             text_encoder=str(text_encoder_path),
             vae=str(vae_path),

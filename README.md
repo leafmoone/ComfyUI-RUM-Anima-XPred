@@ -32,17 +32,17 @@ Put model files under ComfyUI's normal `models/` folders:
 
 ```text
 ComfyUI/models/anima_xpred/       xpred-adapter-checkpoint.safetensors
-ComfyUI/models/diffusion_models/  anima-base-v1.0.safetensors
 ComfyUI/models/text_encoders/     qwen_3_06b_base.safetensors
 ComfyUI/models/vae/               qwen_image_vae.safetensors
 ```
 
 The loader uses ComfyUI dropdowns for these files instead of absolute path text boxes.
+The x-pred checkpoint is loaded directly through the normal Anima DiT loader, so a separate base DiT file is not required.
 
 ## Nodes
 
 - `Load Anima XPred Model`
-  - Loads the Anima DiT x-pred checkpoint, text encoder, and VAE paths.
+  - Loads the Anima DiT x-pred checkpoint, text encoder, and VAE.
   - Use `xpred-adapter-checkpoint.safetensors`, not `xpred-train-state.pt`.
 
 - `Sample Anima XPred`
