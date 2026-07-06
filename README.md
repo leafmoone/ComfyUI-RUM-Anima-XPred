@@ -28,6 +28,17 @@ The nodes need the RUM Anima X-Pred backend repository because model loading and
 export RUM_ANIMA_XPRED_ROOT=/path/to/RUM-anima-xpred
 ```
 
+Put model files under ComfyUI's normal `models/` folders:
+
+```text
+ComfyUI/models/anima_xpred/       xpred-adapter-checkpoint.safetensors
+ComfyUI/models/diffusion_models/  anima-base-v1.0.safetensors
+ComfyUI/models/text_encoders/     qwen_3_06b_base.safetensors
+ComfyUI/models/vae/               qwen_image_vae.safetensors
+```
+
+The loader uses ComfyUI dropdowns for these files instead of absolute path text boxes.
+
 ## Nodes
 
 - `Load Anima XPred Model`
@@ -35,8 +46,9 @@ export RUM_ANIMA_XPRED_ROOT=/path/to/RUM-anima-xpred
   - Use `xpred-adapter-checkpoint.safetensors`, not `xpred-train-state.pt`.
 
 - `Sample Anima XPred`
-  - Runs the dedicated x-pred sampler:
+  - Runs the dedicated x-pred sampler with `heun` or `euler`:
     `v = (z - x_pred) / sigma`
+  - The Heun mode follows JLT's predictor-corrector structure and uses Euler for the final step into `sigma=0`.
   - Decodes the final latent with the Anima/Qwen VAE.
   - Outputs a ComfyUI `IMAGE` plus the raw latent dictionary.
 

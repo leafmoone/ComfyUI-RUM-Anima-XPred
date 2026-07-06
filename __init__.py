@@ -12,6 +12,7 @@ import torch
 
 
 NODE_ROOT = Path(__file__).resolve().parent
+XPRED_FOLDER = "anima_xpred"
 
 
 def _backend_root() -> Path:
@@ -41,14 +42,107 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from rum_xpred.adapters.anima_sd_scripts import create_adapter
-from rum_xpred.anima import make_shifted_sigma_schedule, sample_with_xpred_student, sample_with_vpred_student
+from rum_xpred.anima import anima_euler_step, make_shifted_sigma_schedule, xpred_to_anima_v
 from rum_xpred.cache_batches import make_seeded_eps_batch
 
 
-DEFAULT_CHECKPOINT = str(BACKEND_ROOT / "anima-jlt-xpred-turbo10-chunks/train/chunk-0047/xpred-adapter-checkpoint.safetensors")
-DEFAULT_DIT = "/root/shared-nvme/anima/split_files/diffusion_models/anima-base-v1.0.safetensors"
-DEFAULT_TEXT_ENCODER = "/root/shared-nvme/anima/split_files/text_encoders/qwen_3_06b_base.safetensors"
-DEFAULT_VAE = "/root/shared-nvme/anima/split_files/vae/qwen_image_vae.safetensors"
+def _register_model_folders() -> None:
+    try:
+        import folder_paths
+
+        folder_paths.add_model_folder_path(XPRED_FOLDER, str(Path(folder_paths.models_dir) / XPRED_FOLDER))
+    except Exception:
+        pass
+
+
+_register_model_folders()
+
+
+def _model_names(folder_name: str, placeholder: str) -> list[str]:
+    try:
+        import folder_paths
+
+        names = folder_paths.get_filename_list(folder_name)
+        return names if names else [placeholder]
+    except Exception:
+        return [placeholder]
+
+
+def _model_path(folder_name: str, filename: str) -> Path:
+    try:
+        import folder_paths
+
+        return Path(folder_paths.get_full_path_or_raise(folder_name, filename))
+    except Exception as exc:
+        raise FileNotFoundError(f"Could not resolve {filename!r} from ComfyUI models/{folder_name}") from exc
+
+
+def _sigma_like(value: torch.Tensor, z: torch.Tensor) -> torch.Tensor:
+    return value.reshape(1, 1, 1, 1).to(device=z.device, dtype=z.dtype).expand(z.shape[0], 1, 1, 1)
+
+
+def _velocity_from_xpred(student_forward, z: torch.Tensor, sigma: torch.Tensor, eps_floor: float) -> torch.Tensor:
+    x_pred = student_forward(z, sigma)
+    return xpred_to_anima_v(z, x_pred, sigma, eps_floor)
+
+
+def _sample_euler(
+    student_forward,
+    eps_latent: torch.Tensor,
+    sigmas: torch.Tensor,
+    *,
+    prediction_type: str,
+    eps_floor: float,
+) -> torch.Tensor:
+    z = eps_latent
+    for index, sigma_value in enumerate(sigmas[:-1]):
+        sigma = _sigma_like(sigma_value, z)
+        sigma_next = sigmas[index + 1].reshape(1, 1, 1, 1).to(device=z.device, dtype=z.dtype)
+        if prediction_type == "x":
+            v = _velocity_from_xpred(student_forward, z, sigma, eps_floor)
+        else:
+            v = student_forward(z, sigma)
+        z = anima_euler_step(z, v, sigma, sigma_next)
+        if not torch.isfinite(z).all():
+            raise FloatingPointError(f"non-finite latent during {prediction_type}-pred Euler sampling")
+    return z
+
+
+def _sample_heun(
+    student_forward,
+    eps_latent: torch.Tensor,
+    sigmas: torch.Tensor,
+    *,
+    prediction_type: str,
+    eps_floor: float,
+) -> torch.Tensor:
+    z = eps_latent
+    if sigmas.numel() <= 2:
+        return _sample_euler(student_forward, z, sigmas, prediction_type=prediction_type, eps_floor=eps_floor)
+
+    for index in range(sigmas.numel() - 2):
+        sigma = _sigma_like(sigmas[index], z)
+        sigma_next = _sigma_like(sigmas[index + 1], z)
+        if prediction_type == "x":
+            v = _velocity_from_xpred(student_forward, z, sigma, eps_floor)
+        else:
+            v = student_forward(z, sigma)
+        z_euler = anima_euler_step(z, v, sigma, sigma_next)
+        if prediction_type == "x":
+            v_next = _velocity_from_xpred(student_forward, z_euler, sigma_next, eps_floor)
+        else:
+            v_next = student_forward(z_euler, sigma_next)
+        z = anima_euler_step(z, 0.5 * (v + v_next), sigma, sigma_next)
+        if not torch.isfinite(z).all():
+            raise FloatingPointError(f"non-finite latent during {prediction_type}-pred Heun sampling")
+
+    sigma = _sigma_like(sigmas[-2], z)
+    sigma_next = sigmas[-1].reshape(1, 1, 1, 1).to(device=z.device, dtype=z.dtype)
+    if prediction_type == "x":
+        v = _velocity_from_xpred(student_forward, z, sigma, eps_floor)
+    else:
+        v = student_forward(z, sigma)
+    return anima_euler_step(z, v, sigma, sigma_next)
 
 
 def _comfy_device() -> torch.device:
@@ -105,10 +199,10 @@ class AnimaXPredModelLoader:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "checkpoint": ("STRING", {"default": DEFAULT_CHECKPOINT}),
-                "text_encoder": ("STRING", {"default": DEFAULT_TEXT_ENCODER}),
-                "vae": ("STRING", {"default": DEFAULT_VAE}),
-                "base_dit": ("STRING", {"default": DEFAULT_DIT}),
+                "checkpoint": (_model_names(XPRED_FOLDER, "put_xpred_checkpoint_in_models_anima_xpred.safetensors"),),
+                "text_encoder": (_model_names("text_encoders", "put_qwen_text_encoder_in_models_text_encoders.safetensors"),),
+                "vae": (_model_names("vae", "put_qwen_image_vae_in_models_vae.safetensors"),),
+                "base_dit": (_model_names("diffusion_models", "put_anima_base_dit_in_models_diffusion_models.safetensors"),),
                 "prediction_type": (["x", "v"], {"default": "x"}),
                 "precision": (["bf16", "fp16", "fp32"], {"default": "bf16"}),
                 "attn_mode": (["torch", "flash", "sageattn", "xformers"], {"default": "flash"}),
@@ -136,10 +230,10 @@ class AnimaXPredModelLoader:
         fp8: bool,
         fp8_scaled: bool,
     ):
-        checkpoint_path = Path(checkpoint).expanduser()
-        text_encoder_path = Path(text_encoder).expanduser()
-        vae_path = Path(vae).expanduser()
-        base_dit_path = Path(base_dit).expanduser()
+        checkpoint_path = _model_path(XPRED_FOLDER, checkpoint)
+        text_encoder_path = _model_path("text_encoders", text_encoder)
+        vae_path = _model_path("vae", vae)
+        base_dit_path = _model_path("diffusion_models", base_dit)
         for label, path in {
             "checkpoint": checkpoint_path,
             "text_encoder": text_encoder_path,
@@ -185,6 +279,7 @@ class AnimaXPredSampler:
                 "negative_prompt": ("STRING", {"multiline": True, "default": ""}),
                 "seed": ("INT", {"default": 20260701, "min": 0, "max": 0xFFFFFFFFFFFFFFFF}),
                 "steps": ("INT", {"default": 10, "min": 1, "max": 200}),
+                "sampler": (["heun", "euler"], {"default": "heun"}),
                 "cfg": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 30.0, "step": 0.1}),
                 "width": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 8}),
                 "height": ("INT", {"default": 1024, "min": 64, "max": 4096, "step": 8}),
@@ -207,6 +302,7 @@ class AnimaXPredSampler:
         negative_prompt: str,
         seed: int,
         steps: int,
+        sampler: str,
         cfg: float,
         width: int,
         height: int,
@@ -250,10 +346,22 @@ class AnimaXPredSampler:
                     guidance_scale=cfg,
                 )
 
-            if model.prediction_type == "x":
-                latent = sample_with_xpred_student(student_forward, eps_latent, sigmas, eps_floor=eps_floor)
+            if sampler == "euler":
+                latent = _sample_euler(
+                    student_forward,
+                    eps_latent,
+                    sigmas,
+                    prediction_type=model.prediction_type,
+                    eps_floor=eps_floor,
+                )
             else:
-                latent = sample_with_vpred_student(student_forward, eps_latent, sigmas)
+                latent = _sample_heun(
+                    student_forward,
+                    eps_latent,
+                    sigmas,
+                    prediction_type=model.prediction_type,
+                    eps_floor=eps_floor,
+                )
 
             vae = model.adapter._load_vae()
             vae.to(model.device)
