@@ -12,7 +12,6 @@ import torch
 
 
 NODE_ROOT = Path(__file__).resolve().parent
-XPRED_FOLDER = "anima_xpred"
 
 
 def _backend_root() -> Path:
@@ -44,18 +43,6 @@ if str(SRC_ROOT) not in sys.path:
 from rum_xpred.adapters.anima_sd_scripts import create_adapter
 from rum_xpred.anima import anima_euler_step, make_shifted_sigma_schedule, xpred_to_anima_v
 from rum_xpred.cache_batches import make_seeded_eps_batch
-
-
-def _register_model_folders() -> None:
-    try:
-        import folder_paths
-
-        folder_paths.add_model_folder_path(XPRED_FOLDER, str(Path(folder_paths.models_dir) / XPRED_FOLDER))
-    except Exception:
-        pass
-
-
-_register_model_folders()
 
 
 def _model_names(folder_name: str, placeholder: str) -> list[str]:
@@ -199,7 +186,7 @@ class AnimaXPredModelLoader:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "checkpoint": (_model_names(XPRED_FOLDER, "put_xpred_checkpoint_in_models_anima_xpred.safetensors"),),
+                "checkpoint": (_model_names("diffusion_models", "put_xpred_checkpoint_in_models_diffusion_models.safetensors"),),
                 "text_encoder": (_model_names("text_encoders", "put_qwen_text_encoder_in_models_text_encoders.safetensors"),),
                 "vae": (_model_names("vae", "put_qwen_image_vae_in_models_vae.safetensors"),),
                 "prediction_type": (["x", "v"], {"default": "x"}),
@@ -228,7 +215,7 @@ class AnimaXPredModelLoader:
         fp8: bool,
         fp8_scaled: bool,
     ):
-        checkpoint_path = _model_path(XPRED_FOLDER, checkpoint)
+        checkpoint_path = _model_path("diffusion_models", checkpoint)
         text_encoder_path = _model_path("text_encoders", text_encoder)
         vae_path = _model_path("vae", vae)
         for label, path in {

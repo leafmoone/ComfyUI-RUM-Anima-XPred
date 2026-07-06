@@ -31,13 +31,13 @@ export RUM_ANIMA_XPRED_ROOT=/path/to/RUM-anima-xpred
 Put model files under ComfyUI's normal `models/` folders:
 
 ```text
-ComfyUI/models/anima_xpred/       xpred-adapter-checkpoint.safetensors
+ComfyUI/models/diffusion_models/  xpred-adapter-checkpoint.safetensors
 ComfyUI/models/text_encoders/     qwen_3_06b_base.safetensors
 ComfyUI/models/vae/               qwen_image_vae.safetensors
 ```
 
 The loader uses ComfyUI dropdowns for these files instead of absolute path text boxes.
-The x-pred checkpoint is loaded directly through the normal Anima DiT loader, so a separate base DiT file is not required.
+The x-pred checkpoint is an Anima DiT checkpoint and is loaded directly through the normal Anima DiT loader, so it belongs in the same `diffusion_models` folder as ordinary Anima DiT files. A separate base DiT file is not required.
 
 ## Nodes
 
