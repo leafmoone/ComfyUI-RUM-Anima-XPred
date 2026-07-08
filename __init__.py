@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import gc
-import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,31 +11,9 @@ import torch
 
 
 NODE_ROOT = Path(__file__).resolve().parent
-
-
-def _backend_root() -> Path:
-    candidates = []
-    env_root = os.environ.get("RUM_ANIMA_XPRED_ROOT")
-    if env_root:
-        candidates.append(Path(env_root).expanduser())
-    candidates.extend(
-        [
-            NODE_ROOT.parent / "RUM-anima-xpred",
-            NODE_ROOT.parent / "RUM-anima-x",
-            Path("/root/shared-nvme/RUM-anima-xpred"),
-        ]
-    )
-    for candidate in candidates:
-        if (candidate / "src" / "rum_xpred").is_dir():
-            return candidate
-    raise ImportError(
-        "Could not locate the RUM Anima X-Pred backend. "
-        "Set RUM_ANIMA_XPRED_ROOT to the repository containing src/rum_xpred."
-    )
-
-
-BACKEND_ROOT = _backend_root()
-SRC_ROOT = BACKEND_ROOT / "src"
+SRC_ROOT = NODE_ROOT / "src"
+if not (SRC_ROOT / "rum_xpred").is_dir():
+    raise ImportError(f"Bundled RUM Anima X-Pred package not found: {SRC_ROOT / 'rum_xpred'}")
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 

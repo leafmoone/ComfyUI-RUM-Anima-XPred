@@ -2,8 +2,6 @@
 
 Custom nodes for sampling RUM Anima x-pred checkpoints in ComfyUI.
 
-Repository: https://github.com/leafmoone/ComfyUI-RUM-Anima-XPred
-
 ## Why This Node Exists
 
 Anima x-pred checkpoints do not output the original Flow Matching velocity directly. They output clean latent `x`, and the sampler must read out the Euler update direction as:
@@ -16,16 +14,11 @@ Regular Anima/FM ComfyUI samplers expect a velocity-prediction checkpoint, so wi
 
 ## Install
 
-Clone this repository into `ComfyUI/custom_nodes/`:
+Clone or copy this repository into `ComfyUI/custom_nodes/`:
 
 ```bash
-git clone https://github.com/leafmoone/ComfyUI-RUM-Anima-XPred.git
-```
-
-The nodes need the RUM Anima X-Pred backend repository because model loading and sampling reuse `src/rum_xpred`. If the backend is not at `/root/shared-nvme/RUM-anima-xpred` or a sibling directory, set:
-
-```bash
-export RUM_ANIMA_XPRED_ROOT=/path/to/RUM-anima-xpred
+cd ComfyUI/custom_nodes
+# place the ComfyUI-RUM-Anima-XPred folder here
 ```
 
 Put model files under ComfyUI's normal `models/` folders:
