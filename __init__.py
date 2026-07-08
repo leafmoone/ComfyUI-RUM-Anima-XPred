@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gc
 import sys
+from copy import copy
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -229,6 +230,47 @@ class AnimaXPredModelLoader:
         return (LoadedAnimaXPred(args=args, adapter=adapter, student=student, device=device, dtype=dtype, prediction_type=prediction_type),)
 
 
+class AnimaXPredLoraLoader:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "model": ("RUM_ANIMA_XPRED",),
+                "lora": (_model_names("loras", "put_anima_lora_in_models_loras.safetensors"),),
+                "strength": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step": 0.05}),
+            }
+        }
+
+    RETURN_TYPES = ("RUM_ANIMA_XPRED",)
+    RETURN_NAMES = ("model",)
+    FUNCTION = "load_lora"
+    CATEGORY = "RUM/Anima XPred"
+
+    def load_lora(self, model: LoadedAnimaXPred, lora: str, strength: float):
+        lora_path = _model_path("loras", lora)
+        if not lora_path.is_file():
+            raise FileNotFoundError(f"lora not found: {lora_path}")
+
+        args = copy(model.args)
+        args.teacher_lora = str(lora_path)
+        args.teacher_lora_weight = float(strength)
+
+        adapter = create_adapter(args, device=model.device, dtype=model.dtype)
+        checkpoint_path = getattr(args, "student_init", None) or getattr(args, "dit", None)
+        student = adapter.load_student_xpred(init_checkpoint=checkpoint_path)
+        student.to(device=model.device, dtype=model.dtype).eval().requires_grad_(False)
+        return (
+            LoadedAnimaXPred(
+                args=args,
+                adapter=adapter,
+                student=student,
+                device=model.device,
+                dtype=model.dtype,
+                prediction_type=model.prediction_type,
+            ),
+        )
+
+
 class AnimaXPredSampler:
     @classmethod
     def INPUT_TYPES(cls):
@@ -346,10 +388,12 @@ class AnimaXPredSampler:
 
 NODE_CLASS_MAPPINGS = {
     "AnimaXPredModelLoader": AnimaXPredModelLoader,
+    "AnimaXPredLoraLoader": AnimaXPredLoraLoader,
     "AnimaXPredSampler": AnimaXPredSampler,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "AnimaXPredModelLoader": "Load Anima XPred Model",
+    "AnimaXPredLoraLoader": "Load Anima XPred LoRA",
     "AnimaXPredSampler": "Sample Anima XPred",
 }

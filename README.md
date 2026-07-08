@@ -27,6 +27,7 @@ Put model files under ComfyUI's normal `models/` folders:
 ComfyUI/models/diffusion_models/  xpred-adapter-checkpoint.safetensors
 ComfyUI/models/text_encoders/     qwen_3_06b_base.safetensors
 ComfyUI/models/vae/               qwen_image_vae.safetensors
+ComfyUI/models/loras/             anima-lora.safetensors
 ```
 
 The loader uses ComfyUI dropdowns for these files instead of absolute path text boxes.
@@ -37,6 +38,10 @@ The x-pred checkpoint is an Anima DiT checkpoint and is loaded directly through 
 - `Load Anima XPred Model`
   - Loads the Anima DiT x-pred checkpoint, text encoder, and VAE.
   - Use `xpred-adapter-checkpoint.safetensors`, not `xpred-train-state.pt`.
+
+- `Load Anima XPred LoRA`
+  - Loads an Anima DiT LoRA from ComfyUI's `models/loras` folder.
+  - Takes and returns `RUM_ANIMA_XPRED`, so it belongs between the model loader and sampler.
 
 - `Sample Anima XPred`
   - Runs the dedicated x-pred sampler with `heun` or `euler`:
@@ -51,6 +56,12 @@ Connect:
 
 ```text
 Load Anima XPred Model -> Sample Anima XPred -> Preview Image / Save Image
+```
+
+With a LoRA:
+
+```text
+Load Anima XPred Model -> Load Anima XPred LoRA -> Sample Anima XPred -> Preview Image / Save Image
 ```
 
 Do not connect an x-pred checkpoint to a regular Anima/FM velocity sampler. The checkpoint predicts clean latent `x`, not velocity.
